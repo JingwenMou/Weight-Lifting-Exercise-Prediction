@@ -1,0 +1,122 @@
+---
+title: "Weight Lifting Exercise Prediction"
+author: "Jingwen Mou"
+date: "2022/2/23"
+output: html_document
+---
+
+## Introduction
+
+This project uses data from http://groupware.les.inf.puc-rio.br/har to predict how well people do activities by observing the accelerometers on the belt, forearm, arm, and dumbell of 6 participants. Three prediction methods are used through k-fold validation: decision tree, generalized boosted model, and random forest. The model with highest accuracy among these will be applied to the test data set. 
+
+
+## 0. Data Preparation
+
+```{r, echo = TRUE, warning = FALSE}
+training <- read.csv("~/pml-training.csv")
+testing <- read.csv("~/pml-testing.csv")
+# read the data in
+library(caret)
+set.seed(66)
+```
+
+```{r, echo = TRUE, warning = FALSE}
+training <- training[,colMeans(is.na(training)) < .9]
+# remove the columns that are more than or equal to 90% NAs
+training <- training[,-c(1:5)]
+# remove irrelevant columns
+
+in_train <- createDataPartition(training$classe, p = 0.7, list = FALSE)
+training1 <- training[in_train, ]
+testing1 <- training[-in_train, ]
+# split the data into training and testing groups
+
+NZV <- nearZeroVar(training1)
+training1 <- training1[, -NZV]
+testing1  <- testing1[, -NZV]
+# remove near zero variance variables
+
+control <- trainControl(method="cv", number=3, verboseIter=F)
+# set up control for k-fold validation
+```
+
+
+## 1. Decision Tree
+
+```{r, echo = TRUE, warning = FALSE}
+mod1 <- train(classe~., method = "rpart", data = training1)
+```
+
+```{r, echo = TRUE, warning = FALSE}
+plot(mod1$finalModel, uniform = TRUE, main = "Decision Tree")
+text(mod1$finalModel, use.n = TRUE, all = TRUE, cex = 0.8)
+```
+
+```{r, echo = TRUE, warning = FALSE}
+library(rattle)
+fancyRpartPlot(mod1$finalModel)
+```
+
+```{r, echo = TRUE, warning = FALSE}
+tree_pred <- predict(mod1, testing1)
+cm_tree <- confusionMatrix(tree_pred, factor(testing1$classe))
+cm_tree
+```
+
+The first method I chose to use is the decision tree. The accuracy is 0.4841
+
+
+
+## 2. Boosting
+
+```{r, echo = TRUE, warning = FALSE}
+set.seed(66)
+mod2 <- train(classe~., method = "gbm", data = training1, trControl = control, 
+              tuneLength = 5, verbose = FALSE)
+```
+
+```{r, echo = TRUE, warning = FALSE}
+gbm_pred <- predict(mod2, testing1)
+cm_gbm <- confusionMatrix(gbm_pred, factor(testing1$classe))
+cm_gbm
+```
+
+```{r, echo = TRUE, warning = FALSE}
+plot(cm_gbm$table)
+```
+
+The second method used is boosting, with an accuracy of 0.9993.
+
+
+
+## 3. Random Forest
+
+```{r, echo = TRUE, warning = FALSE}
+set.seed(66)
+mod3 <- train(classe ~ ., data= training1, method="rf",
+                          trControl=control)
+```
+
+```{r, echo = TRUE, warning = FALSE}
+rf_pred <- predict(mod3, testing1)
+cm_rf <- confusionMatrix(rf_pred, factor(testing1$classe))
+cm_rf
+```
+
+```{r, echo = TRUE, warning = FALSE}
+plot(cm_rf$table)
+```
+
+The third method used is random forest, with an accuracy of 0.9978.
+
+
+
+## 4. Apply the seclected model to testing data set.
+
+Comparing the accuracy of three models above, the generalized boosted model have the highest accuracy. And the expected out sample error is 0.007. We will use this model on out testing data set.
+
+```{r, echo = TRUE, warning = FALSE}
+test_pred <- predict(mod2, testing)
+test_pred
+```
+
